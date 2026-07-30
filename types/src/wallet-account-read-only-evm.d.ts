@@ -71,10 +71,38 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
     /**
      * Returns a transaction's receipt.
      *
+     * @deprecated Use {@link getTransaction} instead, which returns a normalized, finality-based receipt. The raw ethers receipt remains available on its `receipt` property.
      * @param {string} hash - The transaction's hash.
      * @returns {Promise<EvmTransactionReceipt | null>} – The receipt, or null if the transaction has not been included in a block yet.
      */
     getTransactionReceipt(hash: string): Promise<EvmTransactionReceipt | null>;
+    /**
+     * Returns a normalized, finality-based receipt for a transaction.
+     *
+     * @param {string} hash - The transaction's hash.
+     * @returns {Promise<EvmTransactionInfo | null>} The normalized receipt, or null if the transaction is not known.
+     */
+    getTransaction(hash: string): Promise<EvmTransactionInfo | null>;
+    /**
+     * Returns whether a block is at or below the chain's `finalized` block. Chains that don't support the tag are treated as not finalized.
+     *
+     * @protected
+     * @param {number} blockNumber - The block number to check.
+     * @returns {Promise<boolean>} True if the block is finalized.
+     */
+    protected _isFinalized(blockNumber: number): Promise<boolean>;
+    /**
+     * Returns whether an unmined transaction has been replaced, i.e. its sender's mined nonce has already advanced past the transaction's nonce.
+     *
+     * @protected
+     * @param {EvmTransactionResponse} transaction - The unmined transaction.
+     * @returns {Promise<boolean>} True if the transaction's nonce slot is already taken.
+     */
+    protected _isReplaced(transaction: EvmTransactionResponse): Promise<boolean>;
+    /** @protected @type {number} */
+    protected get _defaultWaitInterval(): number;
+    /** @protected @type {number} */
+    protected get _defaultWaitTimeout(): number;
     /**
      * Returns the current allowance for the given token and spender.
      * @param {string} token The token's address.
@@ -113,8 +141,18 @@ export type TypedDataDomain = import("ethers").TypedDataDomain;
 export type TypedDataField = import("ethers").TypedDataField;
 export type AuthorizationLike = import("ethers").AuthorizationLike;
 export type EvmTransactionReceipt = import("ethers").TransactionReceipt;
+export type EvmTransactionResponse = import("ethers").TransactionResponse;
 export type TransactionResult = import("@tetherto/wdk-wallet").TransactionResult;
 export type TransferResult = import("@tetherto/wdk-wallet").TransferResult;
+export type TransactionReceipt = import("@tetherto/wdk-wallet").TransactionReceipt;
+/**
+ * A normalized EVM transaction receipt, extended with the confirmation depth and the native ethers transaction and receipt.
+ */
+export type EvmTransactionInfo = TransactionReceipt & {
+    confirmations: number;
+    transaction: import("ethers").TransactionResponse | null;
+    receipt: EvmTransactionReceipt | null;
+};
 export type TypedData = {
     /**
      * - The domain separator.

@@ -28,9 +28,21 @@ import FailoverProvider from '@tetherto/wdk-failover-provider'
 /** @typedef {import('ethers').TypedDataField} TypedDataField */
 /** @typedef {import('ethers').AuthorizationLike} AuthorizationLike */
 /** @typedef {import('ethers').TransactionReceipt} EvmTransactionReceipt */
+/** @typedef {import('ethers').TransactionResponse} EvmTransactionResponse */
 
 /** @typedef {import('@tetherto/wdk-wallet').TransactionResult} TransactionResult */
 /** @typedef {import('@tetherto/wdk-wallet').TransferResult} TransferResult */
+/** @typedef {import('@tetherto/wdk-wallet').TransactionReceipt} TransactionReceipt */
+
+/**
+ * A normalized EVM transaction receipt, extended with the confirmation depth and the native ethers transaction and receipt.
+ *
+ * @typedef {TransactionReceipt & {
+ *   confirmations: number,
+ *   transaction: EvmTransactionResponse | null,
+ *   receipt: EvmTransactionReceipt | null
+ * }} EvmTransactionInfo
+ */
 
 /**
  * @typedef {Object} TypedData
@@ -260,6 +272,7 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
   /**
    * Returns a transaction's receipt.
    *
+   * @deprecated Use {@link getTransaction} instead, which returns a normalized, finality-based receipt. The raw ethers receipt remains available on its `receipt` property.
    * @param {string} hash - The transaction's hash.
    * @returns {Promise<EvmTransactionReceipt | null>} – The receipt, or null if the transaction has not been included in a block yet.
    */
@@ -269,6 +282,94 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
     }
 
     return await this._provider.getTransactionReceipt(hash)
+  }
+
+  /**
+   * Returns a normalized, finality-based receipt for a transaction.
+   *
+   * @param {string} hash - The transaction's hash.
+   * @returns {Promise<EvmTransactionInfo | null>} The normalized receipt, or null if the transaction is not known.
+   */
+  async getTransaction (hash) {
+    if (!this._provider) {
+      throw new Error('The wallet must be connected to a provider to fetch transactions.')
+    }
+
+    const [transaction, receipt] = await Promise.all([
+      this._provider.getTransaction(hash),
+      this._provider.getTransactionReceipt(hash)
+    ])
+
+    if (!transaction && !receipt) {
+      return null
+    }
+
+    if (!receipt) {
+      const dropped = transaction
+        ? await this._isReplaced(transaction)
+        : false
+
+      return {
+        id: hash,
+        finality: dropped ? 'dropped' : 'pending',
+        success: null,
+        confirmations: 0,
+        transaction,
+        receipt: null
+      }
+    }
+
+    const confirmations = await receipt.confirmations()
+    const finalized = await this._isFinalized(receipt.blockNumber)
+
+    return {
+      id: hash,
+      finality: finalized ? 'final' : 'confirmed',
+      success: receipt.status === 1,
+      blockRef: receipt.blockHash,
+      fee: receipt.fee,
+      confirmations,
+      transaction,
+      receipt
+    }
+  }
+
+  /**
+   * Returns whether a block is at or below the chain's `finalized` block. Chains that don't support the tag are treated as not finalized.
+   *
+   * @protected
+   * @param {number} blockNumber - The block number to check.
+   * @returns {Promise<boolean>} True if the block is finalized.
+   */
+  async _isFinalized (blockNumber) {
+    try {
+      const finalizedBlock = await this._provider.getBlock('finalized')
+      return !!finalizedBlock && blockNumber <= finalizedBlock.number
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Returns whether an unmined transaction has been replaced, i.e. its sender's mined nonce has already advanced past the transaction's nonce.
+   *
+   * @protected
+   * @param {EvmTransactionResponse} transaction - The unmined transaction.
+   * @returns {Promise<boolean>} True if the transaction's nonce slot is already taken.
+   */
+  async _isReplaced (transaction) {
+    const accountNonce = await this._provider.getTransactionCount(transaction.from, 'latest')
+    return accountNonce > transaction.nonce
+  }
+
+  /** @protected @type {number} */
+  get _defaultWaitInterval () {
+    return 4000
+  }
+
+  /** @protected @type {number} */
+  get _defaultWaitTimeout () {
+    return 120000
   }
 
   /**

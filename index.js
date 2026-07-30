@@ -19,6 +19,7 @@
 /** @typedef {import('ethers').Authorization} Authorization */
 /** @typedef {import('ethers').AuthorizationLike} AuthorizationLike */
 /** @typedef {import('ethers').TransactionReceipt} EvmTransactionReceipt */
+/** @typedef {import('ethers').TransactionResponse} EvmTransactionResponse */
 
 /** @typedef {import('@tetherto/wdk-wallet').FeeRates} FeeRates */
 /** @typedef {import('@tetherto/wdk-wallet').KeyPair} KeyPair */
@@ -30,6 +31,7 @@
 /** @typedef {import('./src/wallet-account-read-only-evm.js').EvmTransaction} EvmTransaction */
 /** @typedef {import('./src/wallet-account-read-only-evm.js').EvmTransferOptions} EvmTransferOptions */
 /** @typedef {import('./src/wallet-account-read-only-evm.js').EvmWalletConfig} EvmWalletConfig */
+/** @typedef {import('./src/wallet-account-read-only-evm.js').EvmTransactionInfo} EvmTransactionInfo */
 
 /** @typedef {import('./src/wallet-account-evm.js').ApproveOptions} ApproveOptions */
 
