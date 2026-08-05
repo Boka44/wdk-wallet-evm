@@ -310,7 +310,7 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
         : false
 
       return {
-        id: hash,
+        hash,
         finality: dropped ? 'dropped' : 'pending',
         confirmations: 0,
         transaction,
@@ -322,7 +322,7 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
     const finalized = await this._isFinalized(receipt.blockNumber)
 
     return {
-      id: hash,
+      hash,
       finality: finalized ? 'final' : 'confirmed',
       success: receipt.status === 1,
       block: receipt.blockNumber,

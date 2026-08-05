@@ -330,7 +330,7 @@ describe('WalletAccountReadOnlyEvm', () => {
 
       const info = await account.getTransaction(HASH)
 
-      expect(info.id).toBe(HASH)
+      expect(info.hash).toBe(HASH)
       expect(info.finality).toBe('confirmed')
       expect(info.success).toBe(true)
       expect(info.confirmations).toBe(1)
