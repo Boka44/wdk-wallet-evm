@@ -312,7 +312,6 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
       return {
         id: hash,
         finality: dropped ? 'dropped' : 'pending',
-        success: null,
         confirmations: 0,
         transaction,
         receipt: null
@@ -326,7 +325,7 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
       id: hash,
       finality: finalized ? 'final' : 'confirmed',
       success: receipt.status === 1,
-      blockRef: receipt.blockHash,
+      block: receipt.blockHash,
       fee: receipt.fee,
       confirmations,
       transaction,

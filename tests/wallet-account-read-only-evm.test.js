@@ -375,7 +375,7 @@ describe('WalletAccountReadOnlyEvm', () => {
       const info = await account.getTransaction(HASH)
 
       expect(info.finality).toBe('pending')
-      expect(info.success).toBeNull()
+      expect(info.success).toBeUndefined()
       expect(info.confirmations).toBe(0)
       expect(info.transaction).not.toBeNull()
       expect(info.receipt).toBeNull()
@@ -391,7 +391,7 @@ describe('WalletAccountReadOnlyEvm', () => {
       const info = await account.getTransaction(HASH)
 
       expect(info.finality).toBe('dropped')
-      expect(info.success).toBeNull()
+      expect(info.success).toBeUndefined()
       expect(info.confirmations).toBe(0)
       expect(info.transaction).not.toBeNull()
       expect(info.receipt).toBeNull()
