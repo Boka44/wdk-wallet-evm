@@ -325,7 +325,7 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
       id: hash,
       finality: finalized ? 'final' : 'confirmed',
       success: receipt.status === 1,
-      block: receipt.blockHash,
+      block: receipt.blockNumber,
       fee: receipt.fee,
       confirmations,
       transaction,
