@@ -14,7 +14,7 @@
 
 'use strict'
 
-import { WalletAccountReadOnly } from '@tetherto/wdk-wallet'
+import { WalletAccountReadOnly, NoSuchElementError } from '@tetherto/wdk-wallet'
 
 import { BrowserProvider, Contract, Interface, JsonRpcProvider, Network, Signature, toQuantity, verifyMessage, verifyTypedData } from 'ethers'
 
@@ -288,7 +288,8 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
    * Returns a normalized, finality-based receipt for a transaction.
    *
    * @param {string} hash - The transaction's hash.
-   * @returns {Promise<EvmTransactionInfo | null>} The normalized receipt, or null if the transaction is not known.
+   * @returns {Promise<EvmTransactionInfo>} The normalized receipt.
+   * @throws {NoSuchElementError} If no transaction has been found for the given hash.
    */
   async getTransaction (hash) {
     if (!this._provider) {
@@ -301,7 +302,7 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
     ])
 
     if (!transaction && !receipt) {
-      return null
+      throw new NoSuchElementError(`No transaction found for '${hash}'.`)
     }
 
     if (!receipt) {

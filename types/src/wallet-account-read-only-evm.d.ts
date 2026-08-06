@@ -80,9 +80,10 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
      * Returns a normalized, finality-based receipt for a transaction.
      *
      * @param {string} hash - The transaction's hash.
-     * @returns {Promise<EvmTransactionInfo | null>} The normalized receipt, or null if the transaction is not known.
+     * @returns {Promise<EvmTransactionInfo>} The normalized receipt.
+     * @throws {NoSuchElementError} If no transaction has been found for the given hash.
      */
-    getTransaction(hash: string): Promise<EvmTransactionInfo | null>;
+    getTransaction(hash: string): Promise<EvmTransactionInfo>;
     /**
      * Returns whether a block is at or below the chain's `finalized` block. Chains that don't support the tag are treated as not finalized.
      *

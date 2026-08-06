@@ -3,6 +3,7 @@ import { AbiCoder, toQuantity } from 'ethers'
 import { describe, expect, jest, test } from '@jest/globals'
 
 import { WalletAccountReadOnlyEvm } from '../index.js'
+import { NoSuchElementError } from '@tetherto/wdk-wallet'
 
 const ADDRESS = '0x405005C7c4422390F4B334F64Cf20E0b767131d0'
 const TOKEN_ADDRESS = '0x4CC1D60C268B68a7019034E6dE7Fb05d82d827E0'
@@ -409,15 +410,13 @@ describe('WalletAccountReadOnlyEvm', () => {
       expect(info.finality).toBe('pending')
     })
 
-    test('returns null when the transaction is unknown', async () => {
+    test('throws NoSuchElementError when the transaction is unknown', async () => {
       const account = createAccount({
         eth_getTransactionByHash: () => null,
         eth_getTransactionReceipt: () => null
       })
 
-      const info = await account.getTransaction(HASH)
-
-      expect(info).toBeNull()
+      await expect(account.getTransaction(HASH)).rejects.toThrow(NoSuchElementError)
     })
 
     test('should throw if the account is not connected to a provider', async () => {
