@@ -363,14 +363,7 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
   }
 
   /** @protected @type {number} */
-  get _defaultWaitInterval () {
-    return 4000
-  }
-
-  /** @protected @type {number} */
-  get _defaultWaitTimeout () {
-    return 120000
-  }
+  static _DEFAULT_WAIT_TIMEOUT = 120000
 
   /**
    * Returns the current allowance for the given token and spender.

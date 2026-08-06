@@ -101,9 +101,7 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
      */
     protected _isReplaced(transaction: EvmTransactionResponse): Promise<boolean>;
     /** @protected @type {number} */
-    protected get _defaultWaitInterval(): number;
-    /** @protected @type {number} */
-    protected get _defaultWaitTimeout(): number;
+    protected static _DEFAULT_WAIT_TIMEOUT: number;
     /**
      * Returns the current allowance for the given token and spender.
      * @param {string} token The token's address.
