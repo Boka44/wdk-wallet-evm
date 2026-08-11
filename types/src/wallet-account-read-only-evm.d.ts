@@ -81,9 +81,19 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
      *
      * @param {string} hash - The transaction's hash.
      * @returns {Promise<EvmTransactionInfo>} The normalized receipt.
+     * @throws {ValueError} If the hash is not a valid transaction hash.
      * @throws {NoSuchElementError} If no transaction has been found for the given hash.
      */
     getTransaction(hash: string): Promise<EvmTransactionInfo>;
+    /**
+     * Blocks until a transaction reaches a terminal state (the requested finality target or `dropped`), or times out.
+     *
+     * @param {string} hash - The transaction's hash.
+     * @param {WaitForTransactionOptions} [options] - The wait options.
+     * @returns {Promise<EvmTransactionInfo>} The terminal receipt: the finality target reached (inspect `success` to tell success from revert), or `dropped`.
+     * @throws {TimeoutError} If the target is not reached before the timeout.
+     */
+    waitForTransaction(hash: string, options?: WaitForTransactionOptions): Promise<EvmTransactionInfo>;
     /**
      * Returns whether a block is at or below the chain's `finalized` block. Chains that don't support the tag are treated as not finalized.
      *
@@ -144,14 +154,24 @@ export type EvmTransactionResponse = import("ethers").TransactionResponse;
 export type TransactionResult = import("@tetherto/wdk-wallet").TransactionResult;
 export type TransferResult = import("@tetherto/wdk-wallet").TransferResult;
 export type TransactionReceipt = import("@tetherto/wdk-wallet").TransactionReceipt;
+export type WaitForTransactionOptions = import("@tetherto/wdk-wallet").WaitForTransactionOptions;
 /**
- * A normalized EVM transaction receipt, extended with the confirmation depth and the native ethers transaction and receipt.
+ * The EVM-specific fields added to a normalized transaction receipt.
  */
-export type EvmTransactionInfo = TransactionReceipt & {
+export type EvmTransactionDetails = {
+    /**
+     * - The number of confirmations (0 while pending or dropped).
+     */
     confirmations: number;
-    transaction: import("ethers").TransactionResponse | null;
+    /**
+     * - The native ethers receipt, or null while the transaction is pending or dropped.
+     */
     receipt: EvmTransactionReceipt | null;
 };
+/**
+ * A normalized EVM transaction receipt, extended with the EVM-specific fields.
+ */
+export type EvmTransactionInfo = TransactionReceipt & EvmTransactionDetails;
 export type TypedData = {
     /**
      * - The domain separator.

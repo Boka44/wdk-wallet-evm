@@ -3,7 +3,7 @@ import { AbiCoder, toQuantity } from 'ethers'
 import { describe, expect, jest, test } from '@jest/globals'
 
 import { WalletAccountReadOnlyEvm } from '../index.js'
-import { NoSuchElementError } from '@tetherto/wdk-wallet'
+import { NoSuchElementError, ValueError } from '@tetherto/wdk-wallet'
 
 const ADDRESS = '0x405005C7c4422390F4B334F64Cf20E0b767131d0'
 const TOKEN_ADDRESS = '0x4CC1D60C268B68a7019034E6dE7Fb05d82d827E0'
@@ -378,7 +378,6 @@ describe('WalletAccountReadOnlyEvm', () => {
       expect(info.finality).toBe('pending')
       expect(info.success).toBeUndefined()
       expect(info.confirmations).toBe(0)
-      expect(info.transaction).not.toBeNull()
       expect(info.receipt).toBeNull()
     })
 
@@ -394,7 +393,6 @@ describe('WalletAccountReadOnlyEvm', () => {
       expect(info.finality).toBe('dropped')
       expect(info.success).toBeUndefined()
       expect(info.confirmations).toBe(0)
-      expect(info.transaction).not.toBeNull()
       expect(info.receipt).toBeNull()
     })
 
@@ -417,6 +415,12 @@ describe('WalletAccountReadOnlyEvm', () => {
       })
 
       await expect(account.getTransaction(HASH)).rejects.toThrow(NoSuchElementError)
+    })
+
+    test('throws ValueError for a malformed transaction hash', async () => {
+      const account = createAccount({})
+
+      await expect(account.getTransaction('0x1234')).rejects.toThrow(ValueError)
     })
 
     test('should throw if the account is not connected to a provider', async () => {

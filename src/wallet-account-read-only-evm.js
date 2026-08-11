@@ -14,9 +14,9 @@
 
 'use strict'
 
-import { WalletAccountReadOnly, NoSuchElementError } from '@tetherto/wdk-wallet'
+import { WalletAccountReadOnly, NoSuchElementError, ValueError } from '@tetherto/wdk-wallet'
 
-import { BrowserProvider, Contract, Interface, JsonRpcProvider, Network, Signature, toQuantity, verifyMessage, verifyTypedData } from 'ethers'
+import { BrowserProvider, Contract, Interface, isError, isHexString, JsonRpcProvider, Network, Signature, toQuantity, verifyMessage, verifyTypedData } from 'ethers'
 
 import { multicall } from './multicall.js'
 
@@ -33,15 +33,20 @@ import FailoverProvider from '@tetherto/wdk-failover-provider'
 /** @typedef {import('@tetherto/wdk-wallet').TransactionResult} TransactionResult */
 /** @typedef {import('@tetherto/wdk-wallet').TransferResult} TransferResult */
 /** @typedef {import('@tetherto/wdk-wallet').TransactionReceipt} TransactionReceipt */
+/** @typedef {import('@tetherto/wdk-wallet').WaitForTransactionOptions} WaitForTransactionOptions */
 
 /**
- * A normalized EVM transaction receipt, extended with the confirmation depth and the native ethers transaction and receipt.
+ * The EVM-specific fields added to a normalized transaction receipt.
  *
- * @typedef {TransactionReceipt & {
- *   confirmations: number,
- *   transaction: EvmTransactionResponse | null,
- *   receipt: EvmTransactionReceipt | null
- * }} EvmTransactionInfo
+ * @typedef {Object} EvmTransactionDetails
+ * @property {number} confirmations - The number of confirmations (0 while pending or dropped).
+ * @property {EvmTransactionReceipt | null} receipt - The native ethers receipt, or null while the transaction is pending or dropped.
+ */
+
+/**
+ * A normalized EVM transaction receipt, extended with the EVM-specific fields.
+ *
+ * @typedef {TransactionReceipt & EvmTransactionDetails} EvmTransactionInfo
  */
 
 /**
@@ -289,11 +294,16 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
    *
    * @param {string} hash - The transaction's hash.
    * @returns {Promise<EvmTransactionInfo>} The normalized receipt.
+   * @throws {ValueError} If the hash is not a valid transaction hash.
    * @throws {NoSuchElementError} If no transaction has been found for the given hash.
    */
   async getTransaction (hash) {
     if (!this._provider) {
       throw new Error('The wallet must be connected to a provider to fetch transactions.')
+    }
+
+    if (!isHexString(hash, 32)) {
+      throw new ValueError(`Invalid transaction hash: '${hash}'.`)
     }
 
     const [transaction, receipt] = await Promise.all([
@@ -314,7 +324,6 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
         hash,
         finality: dropped ? 'dropped' : 'pending',
         confirmations: 0,
-        transaction,
         receipt: null
       }
     }
@@ -329,9 +338,20 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
       block: receipt.blockNumber,
       fee: receipt.fee,
       confirmations,
-      transaction,
       receipt
     }
+  }
+
+  /**
+   * Blocks until a transaction reaches a terminal state (the requested finality target or `dropped`), or times out.
+   *
+   * @param {string} hash - The transaction's hash.
+   * @param {WaitForTransactionOptions} [options] - The wait options.
+   * @returns {Promise<EvmTransactionInfo>} The terminal receipt: the finality target reached (inspect `success` to tell success from revert), or `dropped`.
+   * @throws {TimeoutError} If the target is not reached before the timeout.
+   */
+  async waitForTransaction (hash, options = {}) {
+    return await super.waitForTransaction(hash, options)
   }
 
   /**
@@ -345,8 +365,15 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
     try {
       const finalizedBlock = await this._provider.getBlock('finalized')
       return !!finalizedBlock && blockNumber <= finalizedBlock.number
-    } catch {
-      return false
+    } catch (error) {
+      // Treat an unsupported 'finalized' block tag as not-finalized; let real failures propagate.
+      const rpcCode = error?.info?.error?.code
+
+      if (isError(error, 'UNSUPPORTED_OPERATION') || rpcCode === -32601 || rpcCode === -32602) {
+        return false
+      }
+
+      throw error
     }
   }
 
