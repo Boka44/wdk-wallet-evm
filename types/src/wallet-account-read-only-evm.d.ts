@@ -110,8 +110,12 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
      * @returns {Promise<boolean>} True if the transaction's nonce slot is already taken.
      */
     protected _isReplaced(transaction: EvmTransactionResponse): Promise<boolean>;
-    /** @protected @type {number} */
-    protected static _DEFAULT_WAIT_TIMEOUT: number;
+    /**
+     * Overrides the base default to allow for slower EVM inclusion and confirmation.
+     *
+     * @type {number}
+     */
+    get defaultWaitTimeout(): number;
     /**
      * Returns the current allowance for the given token and spender.
      * @param {string} token The token's address.

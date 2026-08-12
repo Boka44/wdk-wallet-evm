@@ -389,8 +389,14 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
     return accountNonce > transaction.nonce
   }
 
-  /** @protected @type {number} */
-  static _DEFAULT_WAIT_TIMEOUT = 120000
+  /**
+   * Overrides the base default to allow for slower EVM inclusion and confirmation.
+   *
+   * @type {number}
+   */
+  get defaultWaitTimeout () {
+    return 120000
+  }
 
   /**
    * Returns the current allowance for the given token and spender.
