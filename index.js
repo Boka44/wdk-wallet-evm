@@ -35,7 +35,7 @@
 /** @typedef {import('./src/wallet-account-read-only-evm.js').EvmTransaction} EvmTransaction */
 /** @typedef {import('./src/wallet-account-read-only-evm.js').EvmTransferOptions} EvmTransferOptions */
 /** @typedef {import('./src/wallet-account-read-only-evm.js').EvmWalletConfig} EvmWalletConfig */
-/** @typedef {import('./src/wallet-account-read-only-evm.js').EvmTransactionInfo} EvmTransactionInfo */
+/** @typedef {import('./src/wallet-account-read-only-evm.js').EvmTransactionDetails} EvmTransactionDetails */
 
 /** @typedef {import('./src/wallet-account-evm.js').ApproveOptions} ApproveOptions */
 

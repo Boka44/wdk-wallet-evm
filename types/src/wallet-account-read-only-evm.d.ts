@@ -80,20 +80,20 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
      * Returns a normalized, finality-based receipt for a transaction.
      *
      * @param {string} hash - The transaction's hash.
-     * @returns {Promise<EvmTransactionInfo>} The normalized receipt.
+     * @returns {Promise<TransactionReceipt & EvmTransactionDetails>} The normalized receipt.
      * @throws {ValueError} If the hash is not a valid transaction hash.
      * @throws {NoSuchElementError} If no transaction has been found for the given hash.
      */
-    getTransaction(hash: string): Promise<EvmTransactionInfo>;
+    getTransaction(hash: string): Promise<TransactionReceipt & EvmTransactionDetails>;
     /**
      * Blocks until a transaction reaches a terminal state (the requested finality target or `dropped`), or times out.
      *
      * @param {string} hash - The transaction's hash.
      * @param {WaitForTransactionOptions} [options] - The wait options.
-     * @returns {Promise<EvmTransactionInfo>} The terminal receipt: the finality target reached (inspect `success` to tell success from revert), or `dropped`.
+     * @returns {Promise<TransactionReceipt & EvmTransactionDetails>} The terminal receipt: the finality target reached (inspect `success` to tell success from revert), or `dropped`.
      * @throws {TimeoutError} If the target is not reached before the timeout.
      */
-    waitForTransaction(hash: string, options?: WaitForTransactionOptions): Promise<EvmTransactionInfo>;
+    waitForTransaction(hash: string, options?: WaitForTransactionOptions): Promise<TransactionReceipt & EvmTransactionDetails>;
     /**
      * Returns whether a block is at or below the chain's `finalized` block. Chains that don't support the tag are treated as not finalized.
      *
@@ -172,10 +172,6 @@ export type EvmTransactionDetails = {
      */
     receipt: EvmTransactionReceipt | null;
 };
-/**
- * A normalized EVM transaction receipt, extended with the EVM-specific fields.
- */
-export type EvmTransactionInfo = TransactionReceipt & EvmTransactionDetails;
 export type TypedData = {
     /**
      * - The domain separator.

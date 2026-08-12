@@ -44,12 +44,6 @@ import FailoverProvider from '@tetherto/wdk-failover-provider'
  */
 
 /**
- * A normalized EVM transaction receipt, extended with the EVM-specific fields.
- *
- * @typedef {TransactionReceipt & EvmTransactionDetails} EvmTransactionInfo
- */
-
-/**
  * @typedef {Object} TypedData
  * @property {TypedDataDomain} domain - The domain separator.
  * @property {Record<string, TypedDataField[]>} types - The type definitions.
@@ -293,7 +287,7 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
    * Returns a normalized, finality-based receipt for a transaction.
    *
    * @param {string} hash - The transaction's hash.
-   * @returns {Promise<EvmTransactionInfo>} The normalized receipt.
+   * @returns {Promise<TransactionReceipt & EvmTransactionDetails>} The normalized receipt.
    * @throws {ValueError} If the hash is not a valid transaction hash.
    * @throws {NoSuchElementError} If no transaction has been found for the given hash.
    */
@@ -347,7 +341,7 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
    *
    * @param {string} hash - The transaction's hash.
    * @param {WaitForTransactionOptions} [options] - The wait options.
-   * @returns {Promise<EvmTransactionInfo>} The terminal receipt: the finality target reached (inspect `success` to tell success from revert), or `dropped`.
+   * @returns {Promise<TransactionReceipt & EvmTransactionDetails>} The terminal receipt: the finality target reached (inspect `success` to tell success from revert), or `dropped`.
    * @throws {TimeoutError} If the target is not reached before the timeout.
    */
   async waitForTransaction (hash, options = {}) {

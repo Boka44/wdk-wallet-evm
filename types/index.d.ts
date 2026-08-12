@@ -21,6 +21,6 @@ export type DelegationInfo = import("./src/wallet-account-read-only-evm.js").Del
 export type EvmTransaction = import("./src/wallet-account-read-only-evm.js").EvmTransaction;
 export type EvmTransferOptions = import("./src/wallet-account-read-only-evm.js").EvmTransferOptions;
 export type EvmWalletConfig = import("./src/wallet-account-read-only-evm.js").EvmWalletConfig;
-export type EvmTransactionInfo = import("./src/wallet-account-read-only-evm.js").EvmTransactionInfo;
+export type EvmTransactionDetails = import("./src/wallet-account-read-only-evm.js").EvmTransactionDetails;
 export type ApproveOptions = import("./src/wallet-account-evm.js").ApproveOptions;
 export type UnsignedEvmTransaction = import("./src/utils/tx-populator-evm.js").UnsignedEvmTransaction;
