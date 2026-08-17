@@ -25,7 +25,7 @@ const DEFAULT_ACCOUNT_PATH = "0'/0/0"
 
 /** @typedef {import('../utils/tx-populator-evm.js').UnsignedEvmTransaction} UnsignedEvmTransaction */
 /** @typedef {import('@tetherto/wdk-wallet').ISigner} ISigner */
-/** @typedef {import('@tetherto/wdk-wallet').SignerError} SignerError */
+/** @typedef {import('@tetherto/wdk-wallet').InvalidSignerError} InvalidSignerError */
 /** @typedef {import('@tetherto/wdk-wallet').KeyPair} KeyPair */
 /** @typedef {import('ethers').AuthorizationRequest} AuthorizationRequest */
 /** @typedef {import('ethers').Authorization} Authorization */
@@ -93,7 +93,7 @@ export class ISignerEvm extends ISigner {
    *
    * @param {string} relPath - The relative BIP-44 path segment.
    * @returns {Promise<ISignerEvm>} The derived child signer.
-   * @throws {SignerError} If the signer does not support derivation (e.g. private-key signers).
+   * @throws {InvalidSignerError} If the signer does not support derivation (e.g. private-key signers).
    */
   async derive (relPath) {
     throw new NotImplementedError('derive(relPath)')
