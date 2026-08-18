@@ -39,7 +39,7 @@ export default class PrivateKeySignerEvm extends ISignerEvm {
     /**
      * PrivateKeySignerEvm is not a hierarchical signer and cannot derive.
      * @returns {Promise<never>}
-     * @throws {SignerError} Always — private-key signers do not support derivation.
+     * @throws {InvalidSignerError} Always — private-key signers do not support derivation.
      */
     derive(): Promise<never>;
     /** @returns {Promise<string>} */
