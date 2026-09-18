@@ -8,6 +8,18 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
      */
     protected static _getTransferTransaction(options: EvmTransferOptions): Promise<EvmTransaction>;
     /**
+     * Builds an ethers provider from the wallet configuration:
+     * - a url string -> a new `JsonRpcProvider`
+     * - an already-built ethers provider (or failover wrapper) -> reused as-is
+     * - anything else (EIP-1193 / browser wallet) -> wrapped in a `BrowserProvider`
+     * - an array of the above -> a `FailoverProvider` across each entry
+     *
+     * @protected
+     * @param {Omit<EvmWalletConfig, 'transferMaxFee' | 'transactionMaxFee'>} [config] - The configuration object.
+     * @returns {Provider | undefined} The provider, or undefined if none is configured.
+     */
+    protected static _buildProvider(config?: Omit<EvmWalletConfig, "transferMaxFee" | "transactionMaxFee">): Provider | undefined;
+    /**
      * Creates a new evm read-only wallet account.
      *
      * @param {string} address - The account's address.
