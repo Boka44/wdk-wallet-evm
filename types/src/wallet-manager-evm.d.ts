@@ -73,6 +73,14 @@ export default class WalletManagerEvm extends WalletManager {
         signerName?: string;
     }): Promise<WalletAccountEvm>;
     /**
+     * Builds the account config, injecting the manager's shared provider so accounts reuse
+     * it instead of opening their own client.
+     *
+     * @private
+     * @returns {EvmWalletConfig} The account configuration.
+     */
+    private _accountConfig;
+    /**
      * Returns the current fee rates.
      *
      * @returns {Promise<FeeRates>} The fee rates (in weis).
