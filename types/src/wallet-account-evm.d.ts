@@ -33,6 +33,14 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm implement
     protected _config: EvmWalletConfig;
     /** @private */
     private _signer;
+    /** @private */
+    private _disposed;
+    /**
+     * True if the account has been disposed.
+     *
+     * @type {boolean}
+     */
+    get disposed(): boolean;
     /**
      * The derivation path's index of this account.
      *
@@ -67,6 +75,7 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm implement
      *
      * @param {string} message - The message to sign.
      * @returns {Promise<string>} The message's signature.
+     * @throws {DisposalError} If the account has been disposed.
      */
     sign(message: string): Promise<string>;
     /**
@@ -74,6 +83,7 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm implement
      *
      * @param {TypedData} typedData - The typed data to sign.
      * @returns {Promise<string>} The typed data signature.
+     * @throws {DisposalError} If the account has been disposed.
      */
     signTypedData({ domain, types, message }: TypedData): Promise<string>;
     /**
@@ -84,6 +94,7 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm implement
      * @param {EvmTransaction} tx - The transaction to sign.
      * @returns {Promise<string>} The signed transaction as a hex string.
      * @throws {Error} If a provider is set, and the transaction's cost surpasses the transaction max. fee option.
+     * @throws {DisposalError} If the account has been disposed.
      */
     signTransaction(tx: EvmTransaction): Promise<string>;
     /**
@@ -92,6 +103,7 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm implement
      * @param {EvmTransaction | string} tx - The transaction.
      * @returns {Promise<TransactionResult>} The transaction's result.
      * @throws {Error} If the transaction's cost exceeds the maximum transaction fee option.
+     * @throws {DisposalError} If the account has been disposed.
      */
     sendTransaction(tx: EvmTransaction | string): Promise<TransactionResult>;
     /**
@@ -107,6 +119,7 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm implement
      * @param {EvmTransferOptions} options - The transfer's options.
      * @returns {Promise<TransferResult>} The transfer's result.
      * @throws {Error} If the transfer's cost exceeds the maximum transfer fee option.
+     * @throws {DisposalError} If the account has been disposed.
      */
     transfer(options: EvmTransferOptions): Promise<TransferResult>;
     /**
@@ -115,6 +128,7 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm implement
      * @param {ApproveOptions} options The approve options.
      * @returns {Promise<TransactionResult>} The transaction's result.
      * @throws {Error} If trying to approve usdts on ethereum with allowance not equal to zero (due to the usdt allowance reset requirement).
+     * @throws {DisposalError} If the account has been disposed.
      */
     approve(options: ApproveOptions): Promise<TransactionResult>;
     /**
@@ -128,6 +142,7 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm implement
      *
      * @param {AuthorizationRequest} auth - The authorization request.
      * @returns {Promise<Authorization>} The signed authorization.
+     * @throws {DisposalError} If the account has been disposed.
      */
     signAuthorization(auth: AuthorizationRequest): Promise<Authorization>;
     /**
@@ -139,12 +154,14 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm implement
      *
      * @param {string} delegateAddress - The address of the contract to delegate to.
      * @returns {Promise<TransactionResult>} The transaction result.
+     * @throws {DisposalError} If the account has been disposed.
      */
     delegate(delegateAddress: string): Promise<TransactionResult>;
     /**
      * Revokes any active ERC-7702 delegation by delegating to the zero address.
      *
      * @returns {Promise<TransactionResult>} The transaction result.
+     * @throws {DisposalError} If the account has been disposed.
      */
     revokeDelegation(): Promise<TransactionResult>;
     /**

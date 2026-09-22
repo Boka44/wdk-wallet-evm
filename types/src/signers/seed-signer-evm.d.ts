@@ -48,6 +48,11 @@ export type SeedSignerEvmOpts = {
  */
 export class ISignerEvm extends ISigner {
     /**
+     * True if the signer has been disposed.
+     * @type {boolean}
+     */
+    get disposed(): boolean;
+    /**
      * Whether this signer can derive child signers (i.e. it holds an HD root). Non-derivable
      * signers (e.g. private-key signers) are bound directly to an account; derivable signers
      * derive child accounts and keep the root for management only.
@@ -140,6 +145,13 @@ export default class SeedSignerEvm extends ISignerEvm {
     private _path;
     /** @private */
     private _root;
+    /** @private */
+    private _disposed;
+    /**
+     * True if the signer has been disposed.
+     * @type {boolean}
+     */
+    get disposed(): boolean;
     get isDerivable(): boolean;
     get index(): number | undefined;
     get path(): string | undefined;
@@ -156,12 +168,14 @@ export default class SeedSignerEvm extends ISignerEvm {
      * Sign a plain message string.
      * @param {string} message
      * @returns {Promise<string>}
+     * @throws {DisposalError} If the signer has been disposed.
      */
     sign(message: string): Promise<string>;
     /**
      * Sign a transaction object and return its serialized form.
      * @param {UnsignedEvmTransaction} unsignedTx
      * @returns {Promise<string>}
+     * @throws {DisposalError} If the signer has been disposed.
      */
     signTransaction(unsignedTx: UnsignedEvmTransaction): Promise<string>;
     /**
@@ -169,15 +183,19 @@ export default class SeedSignerEvm extends ISignerEvm {
      *
      * @param {TypedData} typedData - The typed data to sign.
      * @returns {Promise<string>} The typed data signature.
+     * @throws {DisposalError} If the signer has been disposed.
      */
     signTypedData({ domain, types, message }: TypedData): Promise<string>;
     /**
      * Sign an ERC-7702 authorization tuple.
      * @param {AuthorizationRequest} auth
      * @returns {Promise<Authorization>}
+     * @throws {DisposalError} If the signer has been disposed.
      */
     signAuthorization(auth: AuthorizationRequest): Promise<Authorization>;
-    /** Disposes secrets from memory. */
+    /**
+     * Disposes secrets from memory.
+     */
     dispose(): void;
 }
 export type TypedData = import("../wallet-account-read-only-evm.js").TypedData;
