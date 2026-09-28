@@ -1,10 +1,18 @@
 export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
     /**
+     * Extracts the gas and fee overrides set on transfer or approve options.
+     *
+     * @protected
+     * @param {EvmGasOverrides} options - The options to read the overrides from.
+     * @returns {EvmGasOverrides} Only the gas and fee fields that are set on the options.
+     */
+    protected static _getGasOverrides(options: EvmGasOverrides): EvmGasOverrides;
+    /**
      * Returns an evm transaction to execute the given token transfer.
      *
      * @protected
-     * @param {EvmTransferOptions} options - The transfer's options.
-     * @returns {Promise<EvmTransaction>} The evm transaction.
+     * @param {EvmTransferOptions} options - The transfer's options, including any gas overrides and ERC-7702 authorizations to carry onto the transaction.
+     * @returns {Promise<EvmTransaction>} The ERC-20 transfer call as an evm transaction, with the options' gas overrides and authorizations applied.
      */
     protected static _getTransferTransaction(options: EvmTransferOptions): Promise<EvmTransaction>;
     /**
@@ -50,6 +58,7 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
      * Returns the account's eth balance.
      *
      * @returns {Promise<bigint>} The eth balance (in weis).
+     * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
      */
     getBalance(): Promise<bigint>;
     /**
@@ -57,6 +66,7 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
      *
      * @param {string} tokenAddress - The smart contract address of the token.
      * @returns {Promise<bigint>} The token balance (in base unit).
+     * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
      */
     getTokenBalance(tokenAddress: string): Promise<bigint>;
     /**
@@ -64,20 +74,29 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
      *
      * @param {string[]} tokenAddresses - The smart contract addresses of the tokens.
      * @returns {Promise<Record<string, bigint>>} A mapping of token addresses to their balances (in base units).
+     * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
      */
     getTokenBalances(tokenAddresses: string[]): Promise<Record<string, bigint>>;
     /**
      * Quotes the costs of a send transaction operation.
      *
+     * The transaction is always simulated through gas estimation, so one that would revert is rejected here instead of
+     * reaching the signer. A `gasLimit` set on the transaction replaces the estimated gas in the quote, and a `maxFeePerGas`
+     * (or `gasPrice`) set on it replaces the fee rate fetched from the provider, so the quote is the transaction's maximum
+     * cost as it will be sent.
+     *
      * @param {EvmTransaction} tx - The transaction.
      * @returns {Promise<Omit<TransactionResult, 'hash'>>} The transaction's quotes.
+     * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
+     * @throws {Error} If the simulation of the transaction reverts, as an ethers error with code `CALL_EXCEPTION`.
      */
     quoteSendTransaction(tx: EvmTransaction): Promise<Omit<TransactionResult, "hash">>;
     /**
      * Quotes the costs of a transfer operation.
      *
-     * @param {EvmTransferOptions} options - The transfer's options.
+     * @param {EvmTransferOptions} options - The transfer's options, including any gas overrides to carry onto the transaction.
      * @returns {Promise<Omit<TransferResult, 'hash'>>} The transfer's quotes.
+     * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
      */
     quoteTransfer(options: EvmTransferOptions): Promise<Omit<TransferResult, "hash">>;
     /**
@@ -86,6 +105,7 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
      * @deprecated Use {@link getTransaction} instead, which returns a normalized, finality-based receipt. The raw ethers receipt remains available on its `receipt` property.
      * @param {string} hash - The transaction's hash.
      * @returns {Promise<EvmTransactionReceipt | null>} – The receipt, or null if the transaction has not been included in a block yet.
+     * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
      */
     getTransactionReceipt(hash: string): Promise<EvmTransactionReceipt | null>;
     /**
@@ -93,6 +113,7 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
      *
      * @param {string} hash - The transaction's hash.
      * @returns {Promise<TransactionReceipt & EvmTransactionDetails>} The normalized receipt.
+     * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
      * @throws {ValueError} If the hash is not a valid transaction hash.
      * @throws {NoSuchElementError} If no transaction has been found for the given hash.
      */
@@ -133,6 +154,7 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
      * @param {string} token The token's address.
      * @param {string} spender The spender's address.
      * @returns {Promise<bigint>} The allowance.
+     * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
      */
     getAllowance(token: string, spender: string): Promise<bigint>;
     /**
@@ -155,22 +177,36 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
      * Checks if this account has an active ERC-7702 delegation.
      *
      * @returns {Promise<DelegationInfo>} The delegation info.
+     * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
      */
     getDelegation(): Promise<DelegationInfo>;
     /** @private */
     private _estimateGasWithAuthList;
+    /**
+     * Estimates the gas of a transaction by simulating it against the connected provider, using the authorization-list
+     * aware estimation for ERC-7702 transactions.
+     *
+     * @protected
+     * @param {EvmTransactionRequest} tx - The transaction to simulate, including its `from` address.
+     * @returns {Promise<bigint>} The gas units the simulated transaction consumed.
+     */
+    protected _estimateGas(tx: EvmTransactionRequest): Promise<bigint>;
+    private _getFeeRate;
 }
 export type Provider = import("ethers").Provider;
 export type Eip1193Provider = import("ethers").Eip1193Provider;
 export type TypedDataDomain = import("ethers").TypedDataDomain;
 export type TypedDataField = import("ethers").TypedDataField;
+export type BlobLike = import("ethers").BlobLike;
 export type AuthorizationLike = import("ethers").AuthorizationLike;
 export type EvmTransactionReceipt = import("ethers").TransactionReceipt;
 export type EvmTransactionResponse = import("ethers").TransactionResponse;
+export type EvmTransactionRequest = import("ethers").TransactionRequest;
 export type TransactionResult = import("@tetherto/wdk-wallet").TransactionResult;
 export type TransferResult = import("@tetherto/wdk-wallet").TransferResult;
 export type TransactionReceipt = import("@tetherto/wdk-wallet").TransactionReceipt;
 export type WaitForTransactionOptions = import("@tetherto/wdk-wallet").WaitForTransactionOptions;
+export type TransferOptions = import("@tetherto/wdk-wallet").TransferOptions;
 /**
  * The EVM-specific fields added to a normalized transaction receipt.
  */
@@ -250,28 +286,31 @@ export type EvmTransaction = {
      */
     chainId?: number | bigint;
     /**
+     * - The maximum price (in wei) per unit of blob gas this transaction will pay for [EIP-4844](https://eips.ethereum.org/EIPS/eip-4844) blob data. Required for type 3 (blob) transactions.
+     */
+    maxFeePerBlobGas?: number | bigint;
+    /**
+     * - The blobs of an [EIP-4844](https://eips.ethereum.org/EIPS/eip-4844) type 3 transaction.
+     */
+    blobs?: BlobLike[];
+    /**
+     * - The versioned hashes of the blobs of an [EIP-4844](https://eips.ethereum.org/EIPS/eip-4844) type 3 transaction.
+     */
+    blobVersionedHashes?: string[];
+    /**
      * - An optional list of ERC-7702 signed authorizations for type 4 transactions.
      */
     authorizationList?: AuthorizationLike[];
 };
-export type EvmTransferOptions = {
-    /**
-     * - The address of the token to transfer.
-     */
-    token: string;
-    /**
-     * - The address of the recipient.
-     */
-    recipient: string;
-    /**
-     * - The amount of tokens to transfer to the recipient (in base units).
-     */
-    amount: number | bigint;
-    /**
-     * - An optional list of ERC-7702 signed authorizations.
-     */
-    authorizationList?: AuthorizationLike[];
-};
+/**
+ * The gas and fee fields of an evm transaction that can be set on transfer and approve options.
+ */
+export type EvmGasOverrides = Pick<EvmTransaction, "gasLimit" | "gasPrice" | "maxFeePerGas" | "maxPriorityFeePerGas">;
+/**
+ * The options of a token transfer, extended with the optional gas overrides and ERC-7702 authorizations of an evm
+ * transaction.
+ */
+export type EvmTransferOptions = TransferOptions & EvmGasOverrides & Pick<EvmTransaction, "authorizationList">;
 export type EvmWalletConfig = {
     /**
      * - The url of the rpc provider, an already-built ethers provider (e.g. a `JsonRpcProvider` or a failover wrapper), or an instance of a class that implements eip-1193. It's also possible to provide an array of these instead. In such case, connection errors will cause the wallet to automatically fallback on the next provider in the list. An already-built provider is reused as-is, which lets a manager share a single provider across all the accounts it creates.

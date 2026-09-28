@@ -14,6 +14,8 @@
 
 'use strict'
 
+import { MaximumFeeExceededError, ProviderRequiredError, ValueError } from '@tetherto/wdk-wallet'
+
 import { Contract, Transaction, ZeroAddress } from 'ethers'
 
 import { DisposalError } from '@tetherto/wdk-wallet'
@@ -39,6 +41,7 @@ import { populateTransactionEvm } from './utils/tx-populator-evm.js'
 /** @typedef {import('./wallet-account-read-only-evm.js').TypedData} TypedData */
 /** @typedef {import('./wallet-account-read-only-evm.js').EvmTransaction} EvmTransaction */
 /** @typedef {import('./wallet-account-read-only-evm.js').EvmTransferOptions} EvmTransferOptions */
+/** @typedef {import('./wallet-account-read-only-evm.js').EvmGasOverrides} EvmGasOverrides */
 /** @typedef {import('./wallet-account-read-only-evm.js').EvmWalletConfig} EvmWalletConfig */
 
 /**
@@ -46,6 +49,12 @@ import { populateTransactionEvm } from './utils/tx-populator-evm.js'
  * @property {string} token - The address of the token to approve.
  * @property {string} spender - The spender's address.
  * @property {number | bigint} amount - The amount of tokens to approve to the spender.
+ */
+
+/**
+ * The options of a token approval, extended with the optional gas overrides of an evm transaction.
+ *
+ * @typedef {ApproveOptions & EvmGasOverrides} EvmApproveOptions
  */
 
 const USDT_MAINNET_ADDRESS = '0xdAC17F958D2ee523a2206206994597C13D831ec7'
@@ -59,7 +68,7 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm {
    * given BIP-44 path.
    *
    * @overload
-   * @param {string | Uint8Array} seed - The wallet's BIP-39 seed phrase or seed bytes.
+   * @param {string | Uint8Array} seed - A BIP-39 mnemonic seed phrase, or a raw BIP-32 master seed (16-64 bytes).
    * @param {string} path - The BIP-44 derivation path (e.g. "0'/0/0").
    * @param {EvmWalletConfig} [config] - The configuration object.
    */
@@ -196,7 +205,7 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm {
    *
    * @param {EvmTransaction} tx - The transaction to sign.
    * @returns {Promise<string>} The signed transaction as a hex string.
-   * @throws {Error} If a provider is set, and the transaction's cost surpasses the transaction max. fee option.
+   * @throws {MaximumFeeExceededError} If a provider is set, and the transaction's cost surpasses the transaction max. fee option.
    * @throws {DisposalError} If the account has been disposed.
    */
   async signTransaction (tx) {
@@ -208,7 +217,7 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm {
       const { fee } = await this.quoteSendTransaction(tx)
 
       if (fee > this._config.transactionMaxFee) {
-        throw new Error('Exceeded maximum fee cost for transaction operation.')
+        throw new MaximumFeeExceededError('Exceeded maximum fee cost for transaction operation.')
       }
     }
     return await this._signer.signTransaction({
@@ -220,9 +229,11 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm {
   /**
    * Sends a transaction.
    *
-   * @param {EvmTransaction | string} tx - The transaction.
+   * @param {EvmTransaction | string} tx - The transaction, or a signed raw transaction as a hex string.
    * @returns {Promise<TransactionResult>} The transaction's result.
-   * @throws {Error} If the transaction's cost exceeds the maximum transaction fee option.
+   * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
+   * @throws {MaximumFeeExceededError} If the transaction's cost exceeds the maximum transaction fee option.
+   * @throws {ValueError} If the transaction mixes fee fields that its type doesn't support, or a type 3 transaction omits `maxFeePerBlobGas`.
    * @throws {DisposalError} If the account has been disposed.
    */
   async sendTransaction (tx) {
@@ -231,12 +242,18 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm {
     }
 
     if (!this._provider) {
-      throw new Error('The wallet must be connected to a provider to send transactions.')
+      throw new ProviderRequiredError('The wallet must be connected to a provider to send transactions.')
     }
     const { fee } = await this.quoteSendTransaction(tx)
     if (this._config.transactionMaxFee !== undefined && fee > this._config.transactionMaxFee) {
-      throw new Error('Exceeded maximum fee cost for transaction operation.')
+      throw new MaximumFeeExceededError('Exceeded maximum fee cost for transaction operation.')
     }
+
+    if (typeof tx === 'string') {
+      const hash = await this._provider.send('eth_sendRawTransaction', [tx])
+      return { hash, fee }
+    }
+
     // Build, sign and broadcast raw transaction using the signer
     const from = await this.getAddress()
     const unsignedTx = await populateTransactionEvm(this._provider, from, tx)
@@ -248,28 +265,28 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm {
   /**
    * Quotes the costs of a send transaction operation.
    *
-   * @param {EvmTransaction | string} tx - The transaction.
+   * The transaction is always simulated through gas estimation, so one that would revert is rejected here instead of
+   * reaching the signer. A `gasLimit` set on the transaction replaces the estimated gas in the quote, and a `maxFeePerGas`
+   * (or `gasPrice`) set on it replaces the fee rate fetched from the provider, so the quote is the transaction's maximum
+   * cost as it will be sent.
+   * A signed raw transaction is simulated the same way and quoted from its own gas limit and fee cap.
+   *
+   * @param {EvmTransaction | string} tx - The transaction, or a signed raw transaction as a hex string.
    * @returns {Promise<Omit<TransactionResult, 'hash'>>} The transaction's quotes.
+   * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
+   * @throws {Error} If the simulation of the transaction reverts, as an ethers error with code `CALL_EXCEPTION`.
    */
   async quoteSendTransaction (tx) {
     if (typeof tx === 'string') {
       if (!this._provider) {
-        throw new Error('The wallet must be connected to a provider to quote send transaction operations.')
+        throw new ProviderRequiredError('The wallet must be connected to a provider to quote send transaction operations.')
       }
 
       const { from, to, value, data, gasLimit, gasPrice, maxFeePerGas, maxPriorityFeePerGas, type, nonce, chainId, authorizationList } = Transaction.from(tx)
 
-      const transaction = { from, to, value, data, gasLimit, gasPrice, maxFeePerGas, maxPriorityFeePerGas, type, nonce, chainId, authorizationList }
+      await this._estimateGas({ from, to, value, data, gasLimit, gasPrice, maxFeePerGas, maxPriorityFeePerGas, type, nonce, chainId, authorizationList })
 
-      const gas = transaction.authorizationList
-        ? await this._estimateGasWithAuthList(transaction)
-        : await this._provider.estimateGas(transaction)
-
-      const fees = await this._provider.getFeeData()
-
-      const feeRate = fees.maxFeePerGas || fees.gasPrice
-
-      return { fee: gas * feeRate }
+      return { fee: gasLimit * (maxFeePerGas ?? gasPrice) }
     }
 
     return await super.quoteSendTransaction(tx)
@@ -278,9 +295,10 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm {
   /**
    * Transfers a token to another address.
    *
-   * @param {EvmTransferOptions} options - The transfer's options.
+   * @param {EvmTransferOptions} options - The transfer's options, including any gas overrides to carry onto the transaction.
    * @returns {Promise<TransferResult>} The transfer's result.
-   * @throws {Error} If the transfer's cost exceeds the maximum transfer fee option.
+   * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
+   * @throws {MaximumFeeExceededError} If the transfer's cost exceeds the maximum transfer fee option.
    * @throws {DisposalError} If the account has been disposed.
    */
   async transfer (options) {
@@ -289,7 +307,7 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm {
     }
 
     if (!this._provider) {
-      throw new Error('The wallet must be connected to a provider to transfer tokens.')
+      throw new ProviderRequiredError('The wallet must be connected to a provider to transfer tokens.')
     }
 
     const tx = await WalletAccountEvm._getTransferTransaction(options)
@@ -297,7 +315,7 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm {
     const { fee } = await this.quoteSendTransaction(tx)
 
     if (this._config.transferMaxFee !== undefined && fee > this._config.transferMaxFee) {
-      throw new Error('Exceeded maximum fee cost for transfer operation.')
+      throw new MaximumFeeExceededError('Exceeded maximum fee cost for transfer operation.')
     }
 
     const { hash } = await this.sendTransaction(tx)
@@ -308,9 +326,10 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm {
   /**
    * Approves a specific amount of tokens to a spender.
    *
-   * @param {ApproveOptions} options The approve options.
+   * @param {EvmApproveOptions} options - The approve options, including any gas overrides to carry onto the transaction.
    * @returns {Promise<TransactionResult>} The transaction's result.
-   * @throws {Error} If trying to approve usdts on ethereum with allowance not equal to zero (due to the usdt allowance reset requirement).
+   * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
+   * @throws {ValueError} If trying to approve usdts on ethereum with allowance not equal to zero (due to the usdt allowance reset requirement).
    * @throws {DisposalError} If the account has been disposed.
    */
   async approve (options) {
@@ -319,7 +338,7 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm {
     }
 
     if (!this._provider) {
-      throw new Error('The wallet must be connected to a provider to approve funds.')
+      throw new ProviderRequiredError('The wallet must be connected to a provider to approve funds.')
     }
 
     const { token, spender, amount } = options
@@ -328,7 +347,7 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm {
     if (chainId === 1n && token.toLowerCase() === USDT_MAINNET_ADDRESS.toLowerCase()) {
       const currentAllowance = await this.getAllowance(token, spender)
       if (currentAllowance > 0n && BigInt(amount) > 0n) {
-        throw new Error(
+        throw new ValueError(
           'USDT requires the current allowance to be reset to 0 before setting a new non-zero value. Please send an "approve" transaction with an amount of 0 first.'
         )
       }
@@ -340,7 +359,8 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm {
     const tx = {
       to: token,
       value: 0,
-      data: contract.interface.encodeFunctionData('approve', [spender, amount])
+      data: contract.interface.encodeFunctionData('approve', [spender, amount]),
+      ...WalletAccountReadOnlyEvm._getGasOverrides(options)
     }
 
     return await this.sendTransaction(tx)
@@ -394,6 +414,7 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm {
    *
    * @param {string} delegateAddress - The address of the contract to delegate to.
    * @returns {Promise<TransactionResult>} The transaction result.
+   * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
    * @throws {DisposalError} If the account has been disposed.
    */
   async delegate (delegateAddress) {
@@ -402,7 +423,7 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm {
     }
 
     if (!this._provider) {
-      throw new Error('The wallet must be connected to a provider to delegate.')
+      throw new ProviderRequiredError('The wallet must be connected to a provider to delegate.')
     }
 
     const address = await this.getAddress()
