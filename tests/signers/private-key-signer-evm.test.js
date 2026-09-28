@@ -75,6 +75,18 @@ describe('PrivateKeySignerEvm', () => {
 
       signer.dispose()
     })
+
+    test('should own an independent copy of the private key', () => {
+      const keyBytes = new Uint8Array(Buffer.from(VALID_PRIVATE_KEY, 'hex'))
+      const signer = new PrivateKeySignerEvm(keyBytes)
+
+      keyBytes.fill(0)
+
+      expect(Buffer.from(signer.keyPair.privateKey).toString('hex')).toBe(VALID_PRIVATE_KEY)
+
+      signer.dispose()
+    })
+
   })
 
   describe('keyPair', () => {
@@ -149,6 +161,15 @@ describe('PrivateKeySignerEvm', () => {
       signer.dispose()
 
       expect(() => signer.dispose()).not.toThrow()
+    })
+
+    test('should not wipe the caller-supplied key bytes on dispose', () => {
+      const keyBytes = new Uint8Array(Buffer.from(VALID_PRIVATE_KEY, 'hex'))
+      const signer = new PrivateKeySignerEvm(keyBytes)
+
+      signer.dispose()
+
+      expect(Buffer.from(keyBytes).toString('hex')).toBe(VALID_PRIVATE_KEY)
     })
   })
 })

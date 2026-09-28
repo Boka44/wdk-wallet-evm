@@ -14,7 +14,7 @@
 
 'use strict'
 
-import WalletManager, { InvalidSignerError, ProviderRequiredError } from '@tetherto/wdk-wallet'
+import WalletManager, { ProviderRequiredError } from '@tetherto/wdk-wallet'
 
 import WalletAccountEvm from './wallet-account-evm.js'
 import SeedSignerEvm, { BIP_44_ETH_DERIVATION_PATH_PREFIX } from './signers/seed-signer-evm.js'
@@ -23,6 +23,7 @@ import SeedSignerEvm, { BIP_44_ETH_DERIVATION_PATH_PREFIX } from './signers/seed
 /** @typedef {import('ethers').Provider} Provider */
 
 /** @typedef {import("@tetherto/wdk-wallet").FeeRates} FeeRates */
+/** @typedef {import("@tetherto/wdk-wallet").InvalidSignerError} InvalidSignerError */
 /** @typedef {import("@tetherto/wdk-wallet").NoSuchElementError} NoSuchElementError */
 /** @typedef {import("@tetherto/wdk-wallet").UnsupportedOperationError} UnsupportedOperationError */
 /** @typedef {import("@tetherto/wdk-wallet").ValueError} ValueError */
@@ -80,9 +81,6 @@ export default class WalletManagerEvm extends WalletManager {
     let signer = seedOrSigner
     if (isSeed) {
       signer = new SeedSignerEvm(seedOrSigner, BIP_44_ETH_DERIVATION_PATH_PREFIX)
-    }
-    if (!signer.isDerivable) {
-      throw new InvalidSignerError('The default signer must be derivable. Non-derivable signers (e.g. private-key signers) can only be registered by name via addSigner.')
     }
     super(signer, config)
 
