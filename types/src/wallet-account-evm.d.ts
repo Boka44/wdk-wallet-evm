@@ -12,7 +12,7 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm implement
      * Creates a new evm wallet account from a BIP-39 seed, deriving the account's key at the
      * given BIP-44 path.
      *
-     * @param {string | Uint8Array} seed - The wallet's BIP-39 seed phrase or seed bytes.
+     * @param {string | Uint8Array} seed - A BIP-39 mnemonic seed phrase, or a raw BIP-32 master seed (16-64 bytes).
      * @param {string} path - The BIP-44 derivation path (e.g. "0'/0/0").
      * @param {EvmWalletConfig} [config] - The configuration object.
      */
@@ -83,7 +83,7 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm implement
      *
      * @param {EvmTransaction} tx - The transaction to sign.
      * @returns {Promise<string>} The signed transaction as a hex string.
-     * @throws {Error} If a provider is set, and the transaction's cost surpasses the transaction max. fee option.
+     * @throws {MaximumFeeExceededError} If a provider is set, and the transaction's cost surpasses the transaction max. fee option.
      */
     signTransaction(tx: EvmTransaction): Promise<string>;
     /**
@@ -91,32 +91,44 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm implement
      *
      * @param {EvmTransaction | string} tx - The transaction.
      * @returns {Promise<TransactionResult>} The transaction's result.
-     * @throws {Error} If the transaction's cost exceeds the maximum transaction fee option.
+     * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
+     * @throws {MaximumFeeExceededError} If the transaction's cost exceeds the maximum transaction fee option.
+     * @throws {ValueError} If the transaction mixes fee fields that its type doesn't support, or a type 3 transaction omits `maxFeePerBlobGas`.
      */
     sendTransaction(tx: EvmTransaction | string): Promise<TransactionResult>;
     /**
      * Quotes the costs of a send transaction operation.
      *
-     * @param {EvmTransaction | string} tx - The transaction.
+     * The transaction is always simulated through gas estimation, so one that would revert is rejected here instead of
+     * reaching the signer. A `gasLimit` set on the transaction replaces the estimated gas in the quote, and a `maxFeePerGas`
+     * (or `gasPrice`) set on it replaces the fee rate fetched from the provider, so the quote is the transaction's maximum
+     * cost as it will be sent.
+     * A signed raw transaction is simulated the same way and quoted from its own gas limit and fee cap.
+     *
+     * @param {EvmTransaction | string} tx - The transaction, or a signed raw transaction as a hex string.
      * @returns {Promise<Omit<TransactionResult, 'hash'>>} The transaction's quotes.
+     * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
+     * @throws {Error} If the simulation of the transaction reverts, as an ethers error with code `CALL_EXCEPTION`.
      */
     quoteSendTransaction(tx: EvmTransaction | string): Promise<Omit<TransactionResult, "hash">>;
     /**
      * Transfers a token to another address.
      *
-     * @param {EvmTransferOptions} options - The transfer's options.
+     * @param {EvmTransferOptions} options - The transfer's options, including any gas overrides to carry onto the transaction.
      * @returns {Promise<TransferResult>} The transfer's result.
-     * @throws {Error} If the transfer's cost exceeds the maximum transfer fee option.
+     * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
+     * @throws {MaximumFeeExceededError} If the transfer's cost exceeds the maximum transfer fee option.
      */
     transfer(options: EvmTransferOptions): Promise<TransferResult>;
     /**
      * Approves a specific amount of tokens to a spender.
      *
-     * @param {ApproveOptions} options The approve options.
+     * @param {EvmApproveOptions} options - The approve options, including any gas overrides to carry onto the transaction.
      * @returns {Promise<TransactionResult>} The transaction's result.
-     * @throws {Error} If trying to approve usdts on ethereum with allowance not equal to zero (due to the usdt allowance reset requirement).
+     * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
+     * @throws {ValueError} If trying to approve usdts on ethereum with allowance not equal to zero (due to the usdt allowance reset requirement).
      */
-    approve(options: ApproveOptions): Promise<TransactionResult>;
+    approve(options: EvmApproveOptions): Promise<TransactionResult>;
     /**
      * Returns a read-only copy of the account.
      *
@@ -139,6 +151,7 @@ export default class WalletAccountEvm extends WalletAccountReadOnlyEvm implement
      *
      * @param {string} delegateAddress - The address of the contract to delegate to.
      * @returns {Promise<TransactionResult>} The transaction result.
+     * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
      */
     delegate(delegateAddress: string): Promise<TransactionResult>;
     /**
@@ -164,6 +177,7 @@ export type TransferResult = import("@tetherto/wdk-wallet").TransferResult;
 export type TypedData = import("./wallet-account-read-only-evm.js").TypedData;
 export type EvmTransaction = import("./wallet-account-read-only-evm.js").EvmTransaction;
 export type EvmTransferOptions = import("./wallet-account-read-only-evm.js").EvmTransferOptions;
+export type EvmGasOverrides = import("./wallet-account-read-only-evm.js").EvmGasOverrides;
 export type EvmWalletConfig = import("./wallet-account-read-only-evm.js").EvmWalletConfig;
 export type ApproveOptions = {
     /**
@@ -179,4 +193,8 @@ export type ApproveOptions = {
      */
     amount: number | bigint;
 };
+/**
+ * The options of a token approval, extended with the optional gas overrides of an evm transaction.
+ */
+export type EvmApproveOptions = ApproveOptions & EvmGasOverrides;
 import WalletAccountReadOnlyEvm from './wallet-account-read-only-evm.js';

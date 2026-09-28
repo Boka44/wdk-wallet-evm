@@ -14,7 +14,7 @@
 
 'use strict'
 
-import { WalletAccountReadOnly, NoSuchElementError, ValueError } from '@tetherto/wdk-wallet'
+import { WalletAccountReadOnly, NoSuchElementError, ProviderRequiredError, ValueError } from '@tetherto/wdk-wallet'
 
 import { BrowserProvider, Contract, Interface, isError, isHexString, JsonRpcProvider, Network, Signature, toQuantity, verifyMessage, verifyTypedData } from 'ethers'
 
@@ -27,13 +27,16 @@ import FailoverProvider from '@tetherto/wdk-failover-provider'
 /** @typedef {import('ethers').TypedDataDomain} TypedDataDomain */
 /** @typedef {import('ethers').TypedDataField} TypedDataField */
 /** @typedef {import('ethers').AuthorizationLike} AuthorizationLike */
+/** @typedef {import('ethers').BlobLike} BlobLike */
 /** @typedef {import('ethers').TransactionReceipt} EvmTransactionReceipt */
 /** @typedef {import('ethers').TransactionResponse} EvmTransactionResponse */
+/** @typedef {import('ethers').TransactionRequest} EvmTransactionRequest */
 
 /** @typedef {import('@tetherto/wdk-wallet').TransactionResult} TransactionResult */
 /** @typedef {import('@tetherto/wdk-wallet').TransferResult} TransferResult */
 /** @typedef {import('@tetherto/wdk-wallet').TransactionReceipt} TransactionReceipt */
 /** @typedef {import('@tetherto/wdk-wallet').WaitForTransactionOptions} WaitForTransactionOptions */
+/** @typedef {import('@tetherto/wdk-wallet').TransferOptions} TransferOptions */
 
 /**
  * The EVM-specific fields added to a normalized transaction receipt.
@@ -68,15 +71,23 @@ import FailoverProvider from '@tetherto/wdk-failover-provider'
  * @property {number} [type] - The transaction type (e.g. 4 for ERC-7702).
  * @property {number} [nonce] - The transaction nonce.
  * @property {number | bigint} [chainId] - The chain ID of the network.
+ * @property {number | bigint} [maxFeePerBlobGas] - The maximum price (in wei) per unit of blob gas this transaction will pay for [EIP-4844](https://eips.ethereum.org/EIPS/eip-4844) blob data. Required for type 3 (blob) transactions.
+ * @property {BlobLike[]} [blobs] - The blobs of an [EIP-4844](https://eips.ethereum.org/EIPS/eip-4844) type 3 transaction.
+ * @property {string[]} [blobVersionedHashes] - The versioned hashes of the blobs of an [EIP-4844](https://eips.ethereum.org/EIPS/eip-4844) type 3 transaction.
  * @property {AuthorizationLike[]} [authorizationList] - An optional list of ERC-7702 signed authorizations for type 4 transactions.
  */
 
 /**
- * @typedef {Object} EvmTransferOptions
- * @property {string} token - The address of the token to transfer.
- * @property {string} recipient - The address of the recipient.
- * @property {number | bigint} amount - The amount of tokens to transfer to the recipient (in base units).
- * @property {AuthorizationLike[]} [authorizationList] - An optional list of ERC-7702 signed authorizations.
+ * The gas and fee fields of an evm transaction that can be set on transfer and approve options.
+ *
+ * @typedef {Pick<EvmTransaction, 'gasLimit' | 'gasPrice' | 'maxFeePerGas' | 'maxPriorityFeePerGas'>} EvmGasOverrides
+ */
+
+/**
+ * The options of a token transfer, extended with the optional gas overrides and ERC-7702 authorizations of an evm
+ * transaction.
+ *
+ * @typedef {TransferOptions & EvmGasOverrides & Pick<EvmTransaction, 'authorizationList'>} EvmTransferOptions
  */
 
 /**
@@ -192,10 +203,11 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
    * Returns the account's eth balance.
    *
    * @returns {Promise<bigint>} The eth balance (in weis).
+   * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
    */
   async getBalance () {
     if (!this._provider) {
-      throw new Error('The wallet must be connected to a provider to retrieve balances.')
+      throw new ProviderRequiredError('The wallet must be connected to a provider to retrieve balances.')
     }
 
     const address = await this.getAddress()
@@ -210,10 +222,11 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
    *
    * @param {string} tokenAddress - The smart contract address of the token.
    * @returns {Promise<bigint>} The token balance (in base unit).
+   * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
    */
   async getTokenBalance (tokenAddress) {
     if (!this._provider) {
-      throw new Error('The wallet must be connected to a provider to retrieve token balances.')
+      throw new ProviderRequiredError('The wallet must be connected to a provider to retrieve token balances.')
     }
 
     const address = await this.getAddress()
@@ -230,10 +243,11 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
    *
    * @param {string[]} tokenAddresses - The smart contract addresses of the tokens.
    * @returns {Promise<Record<string, bigint>>} A mapping of token addresses to their balances (in base units).
+   * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
    */
   async getTokenBalances (tokenAddresses) {
     if (!this._provider) {
-      throw new Error(
+      throw new ProviderRequiredError(
         'The wallet must be connected to a provider to retrieve token balances.'
       )
     }
@@ -265,36 +279,41 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
   /**
    * Quotes the costs of a send transaction operation.
    *
+   * The transaction is always simulated through gas estimation, so one that would revert is rejected here instead of
+   * reaching the signer. A `gasLimit` set on the transaction replaces the estimated gas in the quote, and a `maxFeePerGas`
+   * (or `gasPrice`) set on it replaces the fee rate fetched from the provider, so the quote is the transaction's maximum
+   * cost as it will be sent.
+   *
    * @param {EvmTransaction} tx - The transaction.
    * @returns {Promise<Omit<TransactionResult, 'hash'>>} The transaction's quotes.
+   * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
+   * @throws {Error} If the simulation of the transaction reverts, as an ethers error with code `CALL_EXCEPTION`.
    */
   async quoteSendTransaction (tx) {
     if (!this._provider) {
-      throw new Error('The wallet must be connected to a provider to quote send transaction operations.')
+      throw new ProviderRequiredError('The wallet must be connected to a provider to quote send transaction operations.')
     }
 
     const from = await this.getAddress()
 
-    const gas = tx.authorizationList
-      ? await this._estimateGasWithAuthList({ from, ...tx })
-      : await this._provider.estimateGas({ from, ...tx })
+    const estimatedGas = await this._estimateGas({ from, ...tx })
 
-    const data = await this._provider.getFeeData()
+    const gas = tx.gasLimit ?? estimatedGas
+    const feeRate = tx.maxFeePerGas ?? tx.gasPrice ?? await this._getFeeRate()
 
-    const feeRate = data.maxFeePerGas || data.gasPrice
-
-    return { fee: gas * feeRate }
+    return { fee: BigInt(gas) * BigInt(feeRate) }
   }
 
   /**
    * Quotes the costs of a transfer operation.
    *
-   * @param {EvmTransferOptions} options - The transfer's options.
+   * @param {EvmTransferOptions} options - The transfer's options, including any gas overrides to carry onto the transaction.
    * @returns {Promise<Omit<TransferResult, 'hash'>>} The transfer's quotes.
+   * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
    */
   async quoteTransfer (options) {
     if (!this._provider) {
-      throw new Error('The wallet must be connected to a provider to quote transfer operations.')
+      throw new ProviderRequiredError('The wallet must be connected to a provider to quote transfer operations.')
     }
 
     const tx = await WalletAccountReadOnlyEvm._getTransferTransaction(options)
@@ -310,10 +329,11 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
    * @deprecated Use {@link getTransaction} instead, which returns a normalized, finality-based receipt. The raw ethers receipt remains available on its `receipt` property.
    * @param {string} hash - The transaction's hash.
    * @returns {Promise<EvmTransactionReceipt | null>} – The receipt, or null if the transaction has not been included in a block yet.
+   * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
    */
   async getTransactionReceipt (hash) {
     if (!this._provider) {
-      throw new Error('The wallet must be connected to a provider to fetch transaction receipts.')
+      throw new ProviderRequiredError('The wallet must be connected to a provider to fetch transaction receipts.')
     }
 
     return await this._provider.getTransactionReceipt(hash)
@@ -324,12 +344,13 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
    *
    * @param {string} hash - The transaction's hash.
    * @returns {Promise<TransactionReceipt & EvmTransactionDetails>} The normalized receipt.
+   * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
    * @throws {ValueError} If the hash is not a valid transaction hash.
    * @throws {NoSuchElementError} If no transaction has been found for the given hash.
    */
   async getTransaction (hash) {
     if (!this._provider) {
-      throw new Error('The wallet must be connected to a provider to fetch transactions.')
+      throw new ProviderRequiredError('The wallet must be connected to a provider to fetch transactions.')
     }
 
     if (!isHexString(hash, 32)) {
@@ -433,10 +454,11 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
    * @param {string} token The token's address.
    * @param {string} spender The spender's address.
    * @returns {Promise<bigint>} The allowance.
+   * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
    */
   async getAllowance (token, spender) {
     if (!this._provider) {
-      throw new Error('The wallet must be connected to a provider to retrieve allowances.')
+      throw new ProviderRequiredError('The wallet must be connected to a provider to retrieve allowances.')
     }
 
     const address = await this.getAddress()
@@ -479,10 +501,11 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
    * Checks if this account has an active ERC-7702 delegation.
    *
    * @returns {Promise<DelegationInfo>} The delegation info.
+   * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
    */
   async getDelegation () {
     if (!this._provider) {
-      throw new Error('The wallet must be connected to a provider to check delegation.')
+      throw new ProviderRequiredError('The wallet must be connected to a provider to check delegation.')
     }
 
     const address = await this.getAddress()
@@ -505,6 +528,62 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
       isDelegated: false,
       delegateAddress: null
     }
+  }
+
+  /**
+   * Estimates the gas of a transaction by simulating it against the connected provider, using the authorization-list
+   * aware estimation for ERC-7702 transactions.
+   *
+   * @protected
+   * @param {EvmTransactionRequest} tx - The transaction to simulate, including its `from` address.
+   * @returns {Promise<bigint>} The gas units the simulated transaction consumed.
+   */
+  async _estimateGas (tx) {
+    return tx.authorizationList
+      ? await this._estimateGasWithAuthList(tx)
+      : await this._provider.estimateGas(tx)
+  }
+
+  /**
+   * Extracts the gas and fee overrides set on transfer or approve options.
+   *
+   * @protected
+   * @param {EvmGasOverrides} options - The options to read the overrides from.
+   * @returns {EvmGasOverrides} Only the gas and fee fields that are set on the options.
+   */
+  static _getGasOverrides (options) {
+    const overrides = {}
+
+    for (const field of ['gasLimit', 'gasPrice', 'maxFeePerGas', 'maxPriorityFeePerGas']) {
+      if (options[field] !== undefined) overrides[field] = options[field]
+    }
+
+    return overrides
+  }
+
+  /**
+   * Returns an evm transaction to execute the given token transfer.
+   *
+   * @protected
+   * @param {EvmTransferOptions} options - The transfer's options, including any gas overrides and ERC-7702 authorizations to carry onto the transaction.
+   * @returns {Promise<EvmTransaction>} The ERC-20 transfer call as an evm transaction, with the options' gas overrides and authorizations applied.
+   */
+  static async _getTransferTransaction (options) {
+    const { token, recipient, amount, authorizationList } = options
+
+    const abi = ['function transfer(address to, uint256 amount) returns (bool)']
+
+    const contract = new Contract(token, abi)
+
+    const tx = {
+      to: token,
+      value: 0,
+      data: contract.interface.encodeFunctionData('transfer', [recipient, amount]),
+      ...WalletAccountReadOnlyEvm._getGasOverrides(options),
+      authorizationList
+    }
+
+    return tx
   }
 
   /** @private */
@@ -540,27 +619,10 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
     return BigInt(result)
   }
 
-  /**
-   * Returns an evm transaction to execute the given token transfer.
-   *
-   * @protected
-   * @param {EvmTransferOptions} options - The transfer's options.
-   * @returns {Promise<EvmTransaction>} The evm transaction.
-   */
-  static async _getTransferTransaction (options) {
-    const { token, recipient, amount, authorizationList } = options
+  /** @private */
+  async _getFeeRate () {
+    const { maxFeePerGas, gasPrice } = await this._provider.getFeeData()
 
-    const abi = ['function transfer(address to, uint256 amount) returns (bool)']
-
-    const contract = new Contract(token, abi)
-
-    const tx = {
-      to: token,
-      value: 0,
-      data: contract.interface.encodeFunctionData('transfer', [recipient, amount]),
-      authorizationList
-    }
-
-    return tx
+    return maxFeePerGas || gasPrice
   }
 }
