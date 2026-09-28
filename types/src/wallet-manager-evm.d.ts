@@ -17,7 +17,7 @@ export default class WalletManagerEvm extends WalletManager<ISignerEvm> {
     /**
      * Creates a new wallet manager for evm blockchains from a BIP-39 seed.
      *
-     * @param {string | Uint8Array} seed - The BIP-39 seed phrase or raw seed bytes.
+     * @param {string | Uint8Array} seed - A BIP-39 mnemonic seed phrase, or a raw BIP-32 master seed (16-64 bytes).
      * @param {EvmWalletConfig} [config] - The configuration object.
      * @throws {ValueError} If the seed phrase is invalid.
      */

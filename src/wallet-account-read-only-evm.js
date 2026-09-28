@@ -30,6 +30,7 @@ import FailoverProvider from '@tetherto/wdk-failover-provider'
 /** @typedef {import('ethers').BlobLike} BlobLike */
 /** @typedef {import('ethers').TransactionReceipt} EvmTransactionReceipt */
 /** @typedef {import('ethers').TransactionResponse} EvmTransactionResponse */
+/** @typedef {import('ethers').TransactionRequest} EvmTransactionRequest */
 
 /** @typedef {import('@tetherto/wdk-wallet').TransactionResult} TransactionResult */
 /** @typedef {import('@tetherto/wdk-wallet').TransferResult} TransferResult */
@@ -289,6 +290,7 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
     const has1559 = tx.maxFeePerGas !== undefined || tx.maxPriorityFeePerGas !== undefined
     const hasLegacy = tx.gasPrice !== undefined
     const hasBlobs = tx.blobs !== undefined || tx.blobVersionedHashes !== undefined || tx.maxFeePerBlobGas !== undefined
+    const hasAuthList = tx.authorizationList !== undefined
     const explicitType = (tx.type !== undefined) ? Number(tx.type) : null
 
     if ((explicitType === 2 || (explicitType === null && has1559)) && hasLegacy) {
@@ -303,15 +305,24 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
     if ((explicitType === 3 || hasBlobs) && tx.maxFeePerBlobGas === undefined) {
       throw new ValueError('maxFeePerBlobGas is required for type 3 transactions')
     }
+    if ((explicitType === 4 || (explicitType === null && hasAuthList)) && hasLegacy) {
+      throw new ValueError('eip-7702 transaction does not support gasPrice')
+    }
   }
 
   /**
    * Quotes the costs of a send transaction operation.
    *
+   * The transaction is always simulated through gas estimation, so one that would revert is rejected here instead of
+   * reaching the signer. A `gasLimit` set on the transaction replaces the estimated gas in the quote, and a `maxFeePerGas`
+   * (or `gasPrice`) set on it replaces the fee rate fetched from the provider, so the quote is the transaction's maximum
+   * cost as it will be sent.
+   *
    * @param {EvmTransaction} tx - The transaction.
    * @returns {Promise<Omit<TransactionResult, 'hash'>>} The transaction's quotes.
    * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
    * @throws {ValueError} If the transaction mixes fee fields that its type doesn't support, or a type 3 transaction omits `maxFeePerBlobGas`.
+   * @throws {Error} If the simulation of the transaction reverts, as an ethers error with code `CALL_EXCEPTION`.
    */
   async quoteSendTransaction (tx) {
     if (!this._provider) {
@@ -322,15 +333,12 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
 
     const from = await this.getAddress()
 
-    const gas = tx.authorizationList
-      ? await this._estimateGasWithAuthList({ from, ...tx })
-      : await this._provider.estimateGas({ from, ...tx })
+    const estimatedGas = await this._estimateGas({ from, ...tx })
 
-    const data = await this._provider.getFeeData()
+    const gas = tx.gasLimit ?? estimatedGas
+    const feeRate = tx.maxFeePerGas ?? tx.gasPrice ?? await this._getFeeRate()
 
-    const feeRate = data.maxFeePerGas || data.gasPrice
-
-    return { fee: gas * feeRate }
+    return { fee: BigInt(gas) * BigInt(feeRate) }
   }
 
   /**
@@ -339,6 +347,8 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
    * @param {EvmTransferOptions} options - The transfer's options, including any gas overrides to carry onto the transaction.
    * @returns {Promise<Omit<TransferResult, 'hash'>>} The transfer's quotes.
    * @throws {ProviderRequiredError} If the wallet is not connected to a provider.
+   * @throws {ValueError} If the options mix gas override fields that the transaction's type doesn't support.
+   * @throws {Error} If the simulation of the transfer reverts, as an ethers error with code `CALL_EXCEPTION`.
    */
   async quoteTransfer (options) {
     if (!this._provider) {
@@ -559,37 +569,18 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
     }
   }
 
-  /** @private */
-  async _estimateGasWithAuthList ({ from, to, value, data, authorizationList }) {
-    const formatAuth = (auth) => {
-      const { address, nonce, chainId } = auth
-
-      const signature = auth.signature instanceof Signature
-        ? auth.signature
-        : Signature.from(auth.signature)
-
-      return {
-        address,
-        nonce: toQuantity(nonce),
-        chainId: toQuantity(chainId),
-        r: toQuantity(signature.r),
-        s: toQuantity(signature.s),
-        yParity: toQuantity(signature.yParity)
-      }
-    }
-
-    const rpcTx = {
-      from,
-      to,
-      value: toQuantity(value),
-      data: data ?? '0x',
-      type: '0x04',
-      authorizationList: authorizationList.map(formatAuth)
-    }
-
-    const result = await this._provider.send('eth_estimateGas', [rpcTx])
-
-    return BigInt(result)
+  /**
+   * Estimates the gas of a transaction by simulating it against the connected provider, using the authorization-list
+   * aware estimation for ERC-7702 transactions.
+   *
+   * @protected
+   * @param {EvmTransactionRequest} tx - The transaction to simulate, including its `from` address.
+   * @returns {Promise<bigint>} The gas units the simulated transaction consumed.
+   */
+  async _estimateGas (tx) {
+    return tx.authorizationList
+      ? await this._estimateGasWithAuthList(tx)
+      : await this._provider.estimateGas(tx)
   }
 
   /**
@@ -632,5 +623,45 @@ export default class WalletAccountReadOnlyEvm extends WalletAccountReadOnly {
     }
 
     return tx
+  }
+
+  /** @private */
+  async _estimateGasWithAuthList ({ from, to, value, data, authorizationList }) {
+    const formatAuth = (auth) => {
+      const { address, nonce, chainId } = auth
+
+      const signature = auth.signature instanceof Signature
+        ? auth.signature
+        : Signature.from(auth.signature)
+
+      return {
+        address,
+        nonce: toQuantity(nonce),
+        chainId: toQuantity(chainId),
+        r: toQuantity(signature.r),
+        s: toQuantity(signature.s),
+        yParity: toQuantity(signature.yParity)
+      }
+    }
+
+    const rpcTx = {
+      from,
+      to,
+      value: toQuantity(value),
+      data: data ?? '0x',
+      type: '0x04',
+      authorizationList: authorizationList.map(formatAuth)
+    }
+
+    const result = await this._provider.send('eth_estimateGas', [rpcTx])
+
+    return BigInt(result)
+  }
+
+  /** @private */
+  async _getFeeRate () {
+    const { maxFeePerGas, gasPrice } = await this._provider.getFeeData()
+
+    return maxFeePerGas || gasPrice
   }
 }

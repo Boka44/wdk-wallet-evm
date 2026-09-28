@@ -11,7 +11,7 @@ export default class SeedSignerEvm implements ISignerEvm {
     /**
      * Create a SeedSignerEvm from a BIP-39 seed.
      *
-     * @param {string|Uint8Array} seed - BIP-39 mnemonic or seed bytes.
+     * @param {string|Uint8Array} seed - A BIP-39 mnemonic seed phrase, or a raw BIP-32 master seed (16-64 bytes).
      * @param {string} [path] - A BIP-32 path (default: "m/44'/60'").
      * @throws {ValueError} If the given seed phrase is invalid.
      */
