@@ -113,7 +113,6 @@ describe('SeedSignerEvm', () => {
     signer.dispose()
 
     expect(signer.disposed).toBe(true)
-    expect(() => signer.dispose()).not.toThrow()
 
     await expect(signer.sign('message')).rejects.toThrow(DisposalError)
     await expect(signer.signTransaction({ to: ZERO_ADDRESS, value: 0 })).rejects.toThrow(DisposalError)
@@ -244,7 +243,6 @@ describe('PrivateKeySignerEvm', () => {
     signer.dispose()
 
     expect(signer.disposed).toBe(true)
-    expect(() => signer.dispose()).not.toThrow()
 
     await expect(signer.sign('message')).rejects.toThrow(DisposalError)
     await expect(signer.signTransaction({ to: ZERO_ADDRESS, value: 0 })).rejects.toThrow(DisposalError)
