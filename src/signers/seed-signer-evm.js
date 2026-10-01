@@ -101,6 +101,7 @@ export class ISignerEvm extends ISigner {
    * @param {string} relPath - The relative BIP-44 path segment.
    * @returns {Promise<ISignerEvm>} The derived child signer.
    * @throws {InvalidSignerError} If the signer does not support derivation (e.g. private-key signers).
+   * @throws {DisposalError} If the signer has been disposed.
    */
   async derive (relPath) {
     throw new NotImplementedError('derive(relPath)')
@@ -118,6 +119,7 @@ export class ISignerEvm extends ISigner {
    * Sign a plain message.
    * @param {string} message
    * @returns {Promise<string>}
+   * @throws {DisposalError} If the signer has been disposed.
    */
   async sign (message) {
     throw new NotImplementedError('sign(message)')
@@ -127,6 +129,7 @@ export class ISignerEvm extends ISigner {
    * Sign a transaction-like object compatible with ethers Transaction.from.
    * @param {UnsignedEvmTransaction} unsignedTx
    * @returns {Promise<string>} The serialized signed transaction hex.
+   * @throws {DisposalError} If the signer has been disposed.
    */
   async signTransaction (unsignedTx) {
     throw new NotImplementedError('signTransaction(unsignedTx)')
@@ -137,6 +140,7 @@ export class ISignerEvm extends ISigner {
    *
    * @param {TypedData} typedData - The typed data to sign.
    * @returns {Promise<string>} The typed data signature.
+   * @throws {DisposalError} If the signer has been disposed.
    */
   async signTypedData ({ domain, types, message }) {
     throw new NotImplementedError('signTypedData(typedData)')
@@ -146,6 +150,7 @@ export class ISignerEvm extends ISigner {
    * Sign an ERC-7702 authorization tuple.
    * @param {AuthorizationRequest} auth
    * @returns {Promise<Authorization>}
+   * @throws {DisposalError} If the signer has been disposed.
    */
   async signAuthorization (auth) {
     throw new NotImplementedError('signAuthorization(auth)')
@@ -270,8 +275,13 @@ export default class SeedSignerEvm extends ISignerEvm {
    * @param {string} relPath
    * @returns {Promise<SeedSignerEvm>}
    * @throws {InvalidSignerError} If called on a derived child signer, which does not retain the root.
+   * @throws {DisposalError} If the signer has been disposed.
    */
   async derive (relPath) {
+    if (this.disposed) {
+      throw new DisposalError('The signer has been disposed.')
+    }
+
     if (!this._root) {
       throw new InvalidSignerError('Cannot derive: this signer has no root (it is a derived child or has been disposed).')
     }

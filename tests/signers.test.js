@@ -101,8 +101,8 @@ describe('SeedSignerEvm', () => {
 
     const promise = root.derive("0'/0/0")
 
-    await expect(promise).rejects.toThrow(InvalidSignerError)
-    await expect(promise).rejects.toThrow('Cannot derive: this signer has no root')
+    await expect(promise).rejects.toThrow(DisposalError)
+    await expect(promise).rejects.toThrow('The signer has been disposed.')
   })
 
   test('should throw DisposalError from signing methods once disposed', async () => {

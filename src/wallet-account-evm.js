@@ -14,11 +14,9 @@
 
 'use strict'
 
-import { MaximumFeeExceededError, ProviderRequiredError, ValueError } from '@tetherto/wdk-wallet'
+import { DisposalError, MaximumFeeExceededError, ProviderRequiredError, ValueError } from '@tetherto/wdk-wallet'
 
 import { Contract, Transaction, ZeroAddress } from 'ethers'
-
-import { DisposalError } from '@tetherto/wdk-wallet'
 
 import WalletAccountReadOnlyEvm from './wallet-account-read-only-evm.js'
 

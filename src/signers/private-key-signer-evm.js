@@ -106,9 +106,14 @@ export default class PrivateKeySignerEvm extends ISignerEvm {
   /**
    * PrivateKeySignerEvm is not a hierarchical signer and cannot derive.
    * @returns {Promise<never>}
-   * @throws {InvalidSignerError} Always — private-key signers do not support derivation.
+   * @throws {DisposalError} If the signer has been disposed.
+   * @throws {InvalidSignerError} Always (when not disposed) — private-key signers do not support derivation.
    */
   async derive () {
+    if (this.disposed) {
+      throw new DisposalError('The signer has been disposed.')
+    }
+
     throw new InvalidSignerError('PrivateKeySignerEvm does not support derivation.')
   }
 
