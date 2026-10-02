@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals'
 
-import { InvalidSignerError, NoSuchElementError, ProviderRequiredError, UnsupportedOperationError } from '@tetherto/wdk-wallet'
+import { InvalidSignerError, NoSuchElementError, ProviderRequiredError } from '@tetherto/wdk-wallet'
 
 import WalletManagerEvm, { WalletAccountEvm } from '../index.js'
 import SeedSignerEvm from '../src/signers/seed-signer-evm.js'
@@ -191,8 +191,8 @@ describe('WalletManagerEvm', () => {
 
       const promise = wallet.getAccountByPath("0'/0/0", { signerName: 'hot' })
 
-      await expect(promise).rejects.toThrow(UnsupportedOperationError)
-      await expect(promise).rejects.toThrow("Method 'derive(path)' is not supported.")
+      await expect(promise).rejects.toThrow(InvalidSignerError)
+      await expect(promise).rejects.toThrow('The signer does not support account derivation.')
     })
   })
 

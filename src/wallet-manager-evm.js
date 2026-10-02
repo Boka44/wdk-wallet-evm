@@ -14,7 +14,7 @@
 
 'use strict'
 
-import WalletManager, { ProviderRequiredError } from '@tetherto/wdk-wallet'
+import WalletManager, { InvalidSignerError, ProviderRequiredError } from '@tetherto/wdk-wallet'
 
 import WalletAccountEvm from './wallet-account-evm.js'
 import SeedSignerEvm, { BIP_44_ETH_DERIVATION_PATH_PREFIX } from './signers/seed-signer-evm.js'
@@ -23,9 +23,7 @@ import SeedSignerEvm, { BIP_44_ETH_DERIVATION_PATH_PREFIX } from './signers/seed
 /** @typedef {import('ethers').Provider} Provider */
 
 /** @typedef {import("@tetherto/wdk-wallet").FeeRates} FeeRates */
-/** @typedef {import("@tetherto/wdk-wallet").InvalidSignerError} InvalidSignerError */
 /** @typedef {import("@tetherto/wdk-wallet").NoSuchElementError} NoSuchElementError */
-/** @typedef {import("@tetherto/wdk-wallet").UnsupportedOperationError} UnsupportedOperationError */
 /** @typedef {import("@tetherto/wdk-wallet").ValueError} ValueError */
 
 /** @typedef {import('./wallet-account-evm.js').EvmWalletConfig} EvmWalletConfig */
@@ -119,7 +117,7 @@ export default class WalletManagerEvm extends WalletManager {
    * @param {string} [options.signerName] - The signer name. Omit to use the default signer.
    * @returns {Promise<WalletAccountEvm>} The account.
    * @throws {NoSuchElementError} If a signer name is given but no signer exists with that name.
-   * @throws {UnsupportedOperationError} If the signer doesn't support account derivation.
+   * @throws {InvalidSignerError} If the signer doesn't support account derivation.
    */
 
   /**
@@ -168,7 +166,7 @@ export default class WalletManagerEvm extends WalletManager {
    * @param {string} [options.signerName] - The signer name. Omit to use the default signer.
    * @returns {Promise<WalletAccountEvm>} The account.
    * @throws {NoSuchElementError} If a signer name is given but no signer exists with that name.
-   * @throws {UnsupportedOperationError} If the signer doesn't support account derivation.
+   * @throws {InvalidSignerError} If the signer doesn't support account derivation.
    */
   async getAccountByPath (path, options = {}) {
     const { signerName } = options
@@ -177,6 +175,9 @@ export default class WalletManagerEvm extends WalletManager {
       return this._accounts[key]
     }
     const signer = this.getSigner(signerName)
+    if (!signer.isDerivable) {
+      throw new InvalidSignerError('The signer does not support account derivation.')
+    }
     const childSigner = await signer.derive(path)
     const account = new WalletAccountEvm(childSigner, { ...this._accountConfig(), shouldWipeSignerOnDisposal: true })
     this._accounts[key] = account
